@@ -1,0 +1,83 @@
+{
+  "chainId": 31611,
+  "factory": "0x14620673294cF7230D3583D916dc57810A0B3494",
+  "token": "0xC76727373a56BB0dcEFdAc1Fde1F892A877add3b",
+  "wallets": [
+    "0x038cA07a4A06627e18fFBa153D2A0Ce6E09eEe39",
+    "0xcFDf87834a756f47C43668B57752F7327652cDaA"
+  ],
+  "transactions": [
+    {
+      "label": "Fund second test wallet with testnet BTC",
+      "hash": "0xd9d719c1a2a9f71818aaff9336df1bb810c97256f87ca7522cfbacb137b83aae",
+      "blockNumber": 16744129,
+      "status": 1
+    },
+    {
+      "label": "Mint dMUSD for creator",
+      "hash": "0x23a573bc5cd856c62dafe2961e5559d5e5de029a108a6c98316a03db61566b1d",
+      "blockNumber": 16744132,
+      "status": 1
+    },
+    {
+      "label": "Mint dMUSD for second member",
+      "hash": "0xc52c749e132823d920ad56b9aa6a8d20e42fdd157cb3b591d3a661d66e7097a7",
+      "blockNumber": 16744137,
+      "status": 1
+    },
+    {
+      "label": "Approve creator test contributions",
+      "hash": "0x5677ceb2f63749aecacd64271be16f3695c26d72f5309b841687fe3403ef6b6c",
+      "blockNumber": 16744141,
+      "status": 1
+    },
+    {
+      "label": "Approve second member test contributions",
+      "hash": "0x580bf99e98fb66247d3f55a68e07cf0be991785842ce066d272238dd10438a74",
+      "blockNumber": 16744143,
+      "status": 1
+    },
+    {
+      "label": "Create payout/refund verification circle",
+      "hash": "0xe7bf5075b81e85e3a1273d4cfe04b07862321f95386092ea89ef275473cd89d8",
+      "blockNumber": 16744146,
+      "status": 1
+    },
+    {
+      "label": "Second test member joins",
+      "hash": "0x9432ef6c70c30af051af5599ec67917989b0527ea073060eb5d7b1836515f7dd",
+      "blockNumber": 16744155,
+      "status": 1
+    },
+    {
+      "label": "Creator contributes round one",
+      "hash": "0x5f8edb7c48f1dbdca0ac23dbfc0f7451f1ac688db3f8aaa56c60643503278aa9",
+      "blockNumber": 16744157,
+      "status": 1
+    },
+    {
+      "label": "Second member completes full pot",
+      "hash": "0x6ace2f51d934b0505be112ee1dd80891aee01a401056ce3c5c98af2b79a05443",
+      "blockNumber": 16744159,
+      "status": 1
+    },
+    {
+      "label": "Second member contributes to incomplete round two",
+      "hash": "0xd983a7da87b189fca65f27dd9c29aef30b32e71f993c4f24238c3eeae65b46d7",
+      "blockNumber": 16744166,
+      "status": 1
+    },
+    {
+      "label": "Claim incomplete-round timeout refund",
+      "hash": "0x46807bcd371b7cd1f4199daa4793a17ec028de435783a24ed3b99635ebe638bc",
+      "blockNumber": 16744196,
+      "status": 1
+    }
+  ],
+  "assertions": [
+    "Confirmed exact 10 dMUSD full-pot payout to first join-order recipient and advancement to round 2.",
+    "Confirmed exact 5.0 dMUSD current-round refund after real chain-time timeout, expired status, no residual pot, and no repeat refund eligibility."
+  ],
+  "circleId": 0,
+  "complete": true
+}

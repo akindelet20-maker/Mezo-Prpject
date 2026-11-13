@@ -1,0 +1,23 @@
+{
+  "chainId": 31611,
+  "deployer": "0x038cA07a4A06627e18fFBa153D2A0Ce6E09eEe39",
+  "receipts": {
+    "MusdAjo": {
+      "hash": "0xd74249c54f8c415c4ff061ab0725faaaade47079dfe74c0eb861ca25ed970c72",
+      "blockNumber": 16744108,
+      "status": 1
+    },
+    "DemoMUSD": {
+      "hash": "0x8d04e74fa67a350badccea1c0d902769c455e667ee0c123c088bd1eba49a40a6",
+      "blockNumber": 16744110,
+      "status": 1
+    }
+  },
+  "MusdAjo": "0x14620673294cF7230D3583D916dc57810A0B3494",
+  "DemoMUSD": "0xC76727373a56BB0dcEFdAc1Fde1F892A877add3b",
+  "factory": "0x14620673294cF7230D3583D916dc57810A0B3494",
+  "token": "0xC76727373a56BB0dcEFdAc1Fde1F892A877add3b",
+  "demoToken": true,
+  "rpc": "https://rpc.test.mezo.org/",
+  "explorer": "https://explorer.test.mezo.org"
+}

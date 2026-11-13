@@ -1,0 +1,44 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const { JsonRpcProvider, FetchRequest, Wallet, Contract, formatUnits } = require('ethers');
+const config = require('../config/mezo-testnet.json');
+const reportPath = path.join(__dirname, '..', 'config', 'mezo-testnet-smoke.json');
+const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+(async () => {
+  if (report.complete) return console.log('Smoke test is already complete. No transaction sent.');
+  if (report.pendingRefundHash) throw new Error(`Inspect existing refund transaction ${report.pendingRefundHash} before any resubmission.`);
+  if (!process.env.SMOKE_MEMBER_KEY) throw new Error('Set only the second test member SMOKE_MEMBER_KEY locally. Never commit it.');
+  const request = new FetchRequest(config.rpc); request.setHeader('User-Agent', 'MUSD-Ajo-Testnet-Prototype');
+  const provider = new JsonRpcProvider(request, 31611, { staticNetwork: true });
+  if (BigInt(await provider.send('eth_chainId', [])) !== 31611n) throw new Error('Mezo testnet only.');
+  const member = new Wallet(process.env.SMOKE_MEMBER_KEY, provider);
+  assert.equal(member.address.toLowerCase(), report.wallets[1].toLowerCase());
+  const ajo = new Contract(config.factory, require('../artifacts/MusdAjo.json').abi, member);
+  const token = new Contract(config.token, require('../artifacts/DemoMUSD.json').abi, member);
+  const circle = await ajo.getCircle(report.circleId);
+  const waitUntil = Date.now() + 10 * 60 * 1000;
+  while (true) {
+    const block = await provider.getBlock('latest');
+    if (BigInt(block.timestamp) > circle.deadline) break;
+    if (Date.now() > waitUntil) throw new Error('Chain deadline not crossed after 10 minutes; no transaction sent.');
+    console.log(`Waiting on chain time at block ${block.number}…`); await new Promise(resolve => setTimeout(resolve, 10000));
+  }
+  const beforeState = await ajo.getMemberState(report.circleId, member.address);
+  assert.equal(beforeState.hasContributed, true); assert.equal(beforeState.canRefund, true);
+  const beforeBalance = await token.balanceOf(member.address);
+  const tx = await ajo.claimRefund(report.circleId);
+  console.log('Refund-only transaction:', tx.hash);
+  report.pendingRefundHash = tx.hash; fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
+  const receipt = await tx.wait(); assert.equal(receipt.status, 1);
+  report.transactions.push({ label: 'Claim incomplete-round timeout refund', hash: receipt.hash, blockNumber: receipt.blockNumber, status: receipt.status });
+  delete report.pendingRefundHash;
+  assert.equal(await token.balanceOf(member.address), beforeBalance + circle.contribution);
+  assert.equal((await ajo.getCircle(report.circleId)).status, 3n);
+  assert.equal(await token.balanceOf(config.factory), 0n);
+  assert.equal((await ajo.getMemberState(report.circleId, member.address)).canRefund, false);
+  report.assertions.push(`Confirmed exact ${formatUnits(circle.contribution, 18)} dMUSD current-round refund after real chain-time timeout, expired status, no residual pot, and no repeat refund eligibility.`);
+  report.complete = true;
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
+  console.log('PASS: actual timeout refund. Full on-chain payout/refund smoke test complete.'); provider.destroy();
+})().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,0 +1,62 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const { JsonRpcProvider, FetchRequest, Wallet, Contract, parseEther } = require('ethers');
+const config = require('../config/mezo-testnet.json');
+const ajoArtifact = require('../artifacts/MusdAjo.json');
+const tokenArtifact = require('../artifacts/DemoMUSD.json');
+(async () => {
+  if (!process.env.PRIVATE_KEY) throw new Error('Set a project testnet PRIVATE_KEY locally. Never commit it.');
+  const request = new FetchRequest(process.env.MEZO_RPC_URL || 'https://rpc.test.mezo.org/');
+  request.setHeader('User-Agent', 'MUSD-Ajo-Testnet-Prototype');
+  const provider = new JsonRpcProvider(request, 31611, { staticNetwork: true });
+  if (BigInt(await provider.send('eth_chainId', [])) !== 31611n) throw new Error('Mezo testnet only.');
+  const first = new Wallet(process.env.PRIVATE_KEY, provider);
+  const keyFile = '/tmp/musd-ajo-smoke-member.key';
+  const second = fs.existsSync(keyFile) ? new Wallet(fs.readFileSync(keyFile, 'utf8').trim(), provider) : Wallet.createRandom().connect(provider);
+  if (!fs.existsSync(keyFile)) fs.writeFileSync(keyFile, second.privateKey + '\n', { mode: 0o600 });
+  const ajo = new Contract(config.factory, ajoArtifact.abi, first);
+  const token = new Contract(config.token, tokenArtifact.abi, first);
+  const report = { chainId: 31611, factory: config.factory, token: config.token, wallets: [first.address, second.address], transactions: [], assertions: [] };
+  const save = () => fs.writeFileSync(path.join(__dirname, '..', 'config', 'mezo-testnet-smoke.json'), JSON.stringify(report, null, 2) + '\n');
+  async function confirmed(label, pending) {
+    const tx = await pending; console.log(`${label}: ${tx.hash}`);
+    const r = await tx.wait(); assert.equal(r.status, 1);
+    report.transactions.push({ label, hash: r.hash, blockNumber: r.blockNumber, status: r.status }); save(); return r;
+  }
+  if (await provider.getBalance(second.address) < parseEther('0.001')) await confirmed('Fund second test wallet with testnet BTC', first.sendTransaction({ to: second.address, value: parseEther('0.005') }));
+  await confirmed('Mint dMUSD for creator', token.mint(first.address, parseEther('100')));
+  await confirmed('Mint dMUSD for second member', token.mint(second.address, parseEther('100')));
+  await confirmed('Approve creator test contributions', token.approve(config.factory, parseEther('10')));
+  await confirmed('Approve second member test contributions', token.connect(second).approve(config.factory, parseEther('10')));
+  const firstBefore = await token.balanceOf(first.address), secondBefore = await token.balanceOf(second.address);
+  const created = await confirmed('Create payout/refund verification circle', ajo.createCircle('Protocol check: payout + refund', config.token, parseEther('5'), 2, 60));
+  const log = created.logs.map(log => { try { return ajo.interface.parseLog(log); } catch { return null; } }).find(log => log?.name === 'CircleCreated');
+  const id = log.args.circleId; report.circleId = Number(id); save();
+  await confirmed('Second test member joins', ajo.connect(second).joinCircle(id));
+  await confirmed('Creator contributes round one', ajo.contribute(id));
+  const paid = await confirmed('Second member completes full pot', ajo.connect(second).contribute(id));
+  const payout = paid.logs.map(log => { try { return ajo.interface.parseLog(log); } catch { return null; } }).find(log => log?.name === 'RoundPaid');
+  assert.equal(payout.args.recipient.toLowerCase(), first.address.toLowerCase()); assert.equal(payout.args.amount, parseEther('10'));
+  assert.equal(await token.balanceOf(first.address), firstBefore + parseEther('5'));
+  assert.equal(await token.balanceOf(second.address), secondBefore - parseEther('5'));
+  assert.equal((await ajo.getCircle(id)).round, 1n);
+  report.assertions.push('Confirmed exact 10 dMUSD full-pot payout to first join-order recipient and advancement to round 2.'); save(); console.log('PASS: actual full-pot payout and round advancement.');
+  await confirmed('Second member contributes to incomplete round two', ajo.connect(second).contribute(id));
+  const deadline = Number((await ajo.getCircle(id)).deadline);
+  const waitUntil = Date.now() + 10 * 60 * 1000;
+  while (true) {
+    const block = await provider.getBlock('latest');
+    if (block.timestamp > deadline) break;
+    if (Date.now() > waitUntil) throw new Error('Chain time has not crossed the deadline within 10 minutes. Inspect this circle before resuming only the refund.');
+    console.log(`Waiting on Mezo block time: block ${block.number}, ${deadline - block.timestamp + 1}s to deadline…`);
+    await new Promise(resolve => setTimeout(resolve, 10000));
+  }
+  await confirmed('Claim incomplete-round timeout refund', ajo.connect(second).claimRefund(id));
+  assert.equal((await ajo.getCircle(id)).status, 3n);
+  assert.equal(await token.balanceOf(second.address), secondBefore - parseEther('5'));
+  assert.equal(await token.balanceOf(config.factory), 0n);
+  assert.equal((await ajo.getMemberState(id, second.address)).canRefund, false);
+  report.assertions.push('Confirmed exact 5 dMUSD current-round refund after real timeout, expired status, no residual pot, and no repeat refund eligibility.');
+  report.complete = true; save(); console.log('PASS: actual timeout refund. Mezo testnet smoke test complete.'); provider.destroy();
+})().catch(error => { console.error(error); process.exitCode = 1; });
